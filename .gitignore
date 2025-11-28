@@ -1,0 +1,21 @@
+# Python environment and build
+backend/.venv/
+__pycache__/
+*.pyc
+*.o
+*.so
+
+# Dependencies
+node_modules/
+
+# Database and data
+chroma_db/
+
+# Private/Secret keys
+.env
+.flaskenv
+
+# OS/IDE files
+.DS_Store
+.vscode/
+.idea/
