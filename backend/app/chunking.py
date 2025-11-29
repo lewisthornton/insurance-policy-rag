@@ -18,17 +18,37 @@ class SectionAwareChunker(NodeParser):
 
     # Look for headers
     section_patterns: List[str] = [
-        r"^\s*Definitions",
-        r"^\s*Core Benefits",
-        r"^\s*Optional benefits",
-        r"^\s*Making a claim",
-        r"^\s*General conditions",
-        r"^\s*Eligibility",
-        r"^\s*Policy Summary",
-        r"^\s*Your cover",
-        r"^\s*Fracture cover",
-        r"^\s*Global treatment",
-        r"^\s*[0-9]+\.\s+[A-Z]", # Numbered sections
+        r"Definitions",
+        r"Core Benefits",
+        r"Co re Benefits",        
+        r"Optional benefits",
+        r"Making a claim",
+        r"General conditions",
+        r"Eligibility",
+        r"Policy Summary",
+        r"^\s*Your cover",         
+        r"Fracture cover",
+        r"Global treatment",
+        r"What types of cover", 
+        r"^\s*[0-9]+\.\s+[A-Z]",
+    ]
+
+    noise_patterns: List[str] = [
+        r"Policy Conditions.*Living Costs Protection", # Catches the fused header
+        r"Living Costs Protection.*Policy Conditions",
+        r"Policy Summary.*Living Costs Protection",
+        r"Aviva Life & Pensions UK Limited",
+        r"aviva\.co\.uk",
+        r"^[0-9]+$",                    # Lone page numbers (e.g. "9")
+        r"^Page\s+[0-9]+$",             # "Page 10"
+        r"^AVIVA$",                     # Logo text
+        r"^keyfacts$",                  # Common logo text
+        r"^Need this in a different format\?$", # Accessibility footer
+        r"P\s?a\s?g\s?e\s+\d+$",
+        r"^\s*ge\s+\d+$",
+        r"^\s*Pa\s*$",
+        r"^Contents$",
+        r"\.indd",
     ]
 
     def _parse_nodes(self, nodes: List[TextNode], show_progress: bool = False, **kwargs) -> List[TextNode]:
@@ -74,36 +94,46 @@ class SectionAwareChunker(NodeParser):
         return all_nodes
     
     def _split_by_headers(self, text: str, initial_section_title: str) -> Tuple[List[Tuple[str, str]], str]:
-        """
-        Splits text by regex headers. Returns list of (Section Title, Text).
-        """
         lines = text.split("\n")
         sections = []
-
-        # Use initial section title
-        current_section_title = initial_section_title
-        current_section_lines = []
+        
+        current_title = initial_section_title
+        current_lines = []
 
         combined_pattern = "|".join(self.section_patterns)
 
+        combined_noise_pattern = "|".join(self.noise_patterns)
+
         for line in lines:
-            line = line
+            line = line.strip()
             if not line:
                 continue
 
-            if re.search(combined_pattern, line, re.IGNORECASE):
-                # Save previous section
-                if current_section_lines:
-                    sections.append((current_section_title, "\n".join(current_section_lines)))
+            if re.search(combined_noise_pattern, line, re.IGNORECASE):
+                continue
+
+            # --- UPDATED HEADER DETECTION LOGIC ---
+            match = re.search(combined_pattern, line, re.IGNORECASE)
+            is_short_enough = len(line) < 100  # Increased slightly to catch longer headers
+            is_not_sentence = not line.endswith('.') # Ignores full sentences
+            
+            # NEW: Filter out Table of Contents / Page numbers
+            # If line ends with a digit (e.g. "Page 10", "12"), it's likely a TOC or footer.
+            has_trailing_digit = line[-1].isdigit() 
+            
+            if match and is_short_enough and is_not_sentence and not has_trailing_digit:
+                # If we have accumulated text, save it
+                if current_lines:
+                    sections.append((current_title, "\n".join(current_lines)))
                 
                 # Start new section
-                current_section_title = line.strip()
-                current_section_lines = []
+                current_title = line
+                current_lines = []
             else:
-                current_section_lines.append(line)
+                current_lines.append(line)
 
-        # Add the last section
-        if current_section_lines:
-            sections.append((current_section_title, "\n".join(current_section_lines)))
-
-        return sections, current_section_title
+        # Append leftovers
+        if current_lines:
+            sections.append((current_title, "\n".join(current_lines)))
+            
+        return sections, current_title

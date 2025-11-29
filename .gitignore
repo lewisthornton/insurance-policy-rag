@@ -19,3 +19,6 @@ chroma_db/
 .DS_Store
 .vscode/
 .idea/
+
+inspect_chunks.py
+*audit_report*
